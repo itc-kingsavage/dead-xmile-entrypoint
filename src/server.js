@@ -1,58 +1,41 @@
-// ───────────────────────────────────────────
-//  DEAD-XMILE ENTRYPOINT — SERVER.JS
-//  Express Server + Static UI + API Loader
-// ───────────────────────────────────────────
-
+// src/server.js
 import express from "express";
 import path from "path";
-import cors from "cors";
 import { fileURLToPath } from "url";
-import qrRoute from "./routes/qr.js";
-import sessionRoute from "./routes/session.js";
-import banner from "./utils/banners.js";
-import logger from "./utils/logger.js";
+import qrRoutes from "./routes/qr.js";
+import sessionRoutes from "./routes/session.js";
+import colors from "./utils/colors.js";
+import { logInfo } from "./utils/logger.js";
+import showBanner from "./utils/banners.js";
 
-// Resolve __dirname in ES Modules
+const app = express();
+
+// Required for ES module dirname usage
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-// ───────────────────────────────────────────
-//  Middleware
-// ───────────────────────────────────────────
-
-app.use(cors());
+// Middlewares
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve UI from /public
+// Static UI
 app.use(express.static(path.join(__dirname, "../public")));
 
-// ───────────────────────────────────────────
-//  API Routes
-// ───────────────────────────────────────────
+// Routes
+app.use("/qr", qrRoutes);
+app.use("/session", sessionRoutes);
 
-app.use("/api/qr", qrRoute);           // QR + Pairing Code Endpoint
-app.use("/api/session", sessionRoute); // Session Export / Delete / Status
-
-// ───────────────────────────────────────────
-//  Default Route — UI Landing Page
-// ───────────────────────────────────────────
-
+// Fallback → return UI index
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "../public/index.html"));
+    res.sendFile(path.join(__dirname, "../public/index.html"));
 });
 
-// ───────────────────────────────────────────
-//  Start Server
-// ───────────────────────────────────────────
+// Start Server
+export const startServer = (PORT = process.env.PORT || 3000) => {
+    app.listen(PORT, () => {
+        showBanner();
+        logInfo(`Scanner server running on ${colors.GREEN}http://localhost:${PORT}${colors.RESET}`);
+    });
+};
 
-app.listen(PORT, () => {
-  console.clear();
-  console.log(banner());
-  logger("green", `🚀 DEAD-XMILE ENTRYPOINT RUNNING`);
-  logger("cyan",  `🌐 Scanner UI: http://localhost:${PORT}`);
-  logger("yellow",`⚙️  API Active: /api/qr | /api/session`);
-});
+export default app;

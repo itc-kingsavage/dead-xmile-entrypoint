@@ -1,38 +1,30 @@
-// ─────────────────────────────────────────────
-//  DEAD-XMILE ENTRYPOINT — QR ROUTE
-//  Returns QR, Pairing Code, and Scanner Status
-// ─────────────────────────────────────────────
+// src/routes/qr.js
 
-import express from "express";
-import { getScannerState } from "../index.js";
-import response from "../utils/response.js";
-import logger from "../utils/logger.js";
-
+const express = require("express");
 const router = express.Router();
 
-router.get("/", (req, res) => {
-  try {
-    const { qr, pairingCode, status } = getScannerState();
+const generateQR = require("../qr/generate");
+const displayQR = require("../qr/display");
+const response = require("../utils/response");
+const logger = require("../utils/logger");
 
-    logger("cyan", "📡 QR Route Requested");
+router.get("/", async (req, res) => {
+    try {
+        logger.info("Request received: /qr");
 
-    return res.json(
-      response(true, "Scanner state fetched", {
-        status,
-        qr,           // base64 QR
-        pairingCode,  // numeric code
-      })
-    );
+        const qr = await generateQR();
 
-  } catch (err) {
-    logger("red", `QR API Error: ${err}`);
+        // Display QR locally on terminal
+        await displayQR(qr);
 
-    return res.json(
-      response(false, "Failed to fetch QR state", {
-        error: err.toString(),
-      })
-    );
-  }
+        return response.success(res, "QR generated successfully!", {
+            qr
+        });
+
+    } catch (error) {
+        logger.error("QR generation failed:", error);
+        return response.error(res, "Failed to generate QR", error);
+    }
 });
 
-export default router;
+module.exports = router;

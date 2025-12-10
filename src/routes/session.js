@@ -1,82 +1,70 @@
-// ─────────────────────────────────────────────
-//  DEAD-XMILE ENTRYPOINT — SESSION ROUTE
-//  Check Status • Delete Session • Export Soon
-// ─────────────────────────────────────────────
+// src/routes/session.js
 
-import express from "express";
-import fs from "fs";
-import path from "path";
-import response from "../utils/response.js";
-import logger from "../utils/logger.js";
-
+const express = require("express");
 const router = express.Router();
 
-// Path where Baileys stores auth files
-const SESSION_PATH = path.join(process.cwd(), "auth_info_baileys");
+const saveSession = require("../session/save");
+const loadSession = require("../session/load");
+const deleteSession = require("../session/delete");
+const validateSession = require("../session/validate");
 
-// ─────────────────────────────────────────────
-//  CHECK SESSION STATUS
-// ─────────────────────────────────────────────
+const response = require("../utils/response");
+const logger = require("../utils/logger");
 
-router.get("/status", (req, res) => {
-  try {
-    const exists = fs.existsSync(SESSION_PATH);
-    logger("cyan", "📎 Session status requested");
+// 🟢 Load Session
+router.get("/load", async (req, res) => {
+    try {
+        logger.info("Request received: /session/load");
 
-    return res.json(
-      response(true, "Session status loaded", {
-        sessionExists: exists,
-      })
-    );
-  } catch (err) {
-    logger("red", `Session Status Error: ${err}`);
+        const session = await loadSession();
+        return response.success(res, "Session loaded", session);
 
-    return res.json(
-      response(false, "Failed to check session", {
-        error: err.toString(),
-      })
-    );
-  }
-});
-
-// ─────────────────────────────────────────────
-//  DELETE SESSION
-// ─────────────────────────────────────────────
-
-router.delete("/delete", (req, res) => {
-  try {
-    if (fs.existsSync(SESSION_PATH)) {
-      fs.rmSync(SESSION_PATH, { recursive: true, force: true });
+    } catch (err) {
+        return response.error(res, "Failed to load session", err);
     }
-
-    logger("yellow", "🗑 Session deleted");
-
-    return res.json(
-      response(true, "Session removed successfully", {
-        sessionExists: false,
-      })
-    );
-  } catch (err) {
-    logger("red", `Session Delete Error: ${err}`);
-
-    return res.json(
-      response(false, "Failed to delete session", {
-        error: err.toString(),
-      })
-    );
-  }
 });
 
-// ─────────────────────────────────────────────
-//  EXPORT SESSION (COMING LATER — MONGODB)
-// ─────────────────────────────────────────────
+// 🔵 Save Session
+router.post("/save", async (req, res) => {
+    try {
+        logger.info("Request received: /session/save");
 
-router.get("/export", (req, res) => {
-  logger("yellow", "⚠️ Export session not implemented yet");
+        const data = req.body || {};
+        const result = await saveSession(data);
 
-  return res.json(
-    response(false, "Export feature will be added after MongoDB setup")
-  );
+        return response.success(res, "Session saved successfully", result);
+
+    } catch (err) {
+        return response.error(res, "Failed to save session", err);
+    }
 });
 
-export default router;
+// 🔴 Delete Session
+router.delete("/delete", async (req, res) => {
+    try {
+        logger.info("Request received: /session/delete");
+
+        const result = await deleteSession();
+
+        return response.success(res, "Session deleted", result);
+
+    } catch (err) {
+        return response.error(res, "Failed to delete session", err);
+    }
+});
+
+// 🟡 Validate Session
+router.get("/validate", async (req, res) => {
+    try {
+        logger.info("Request received: /session/validate");
+
+        const valid = await validateSession();
+
+        return response.success(res, "Validation result", { valid });
+
+    } catch (err) {
+        return response.error(res, "Validation failed", err);
+    }
+});
+
+module.exports = router;

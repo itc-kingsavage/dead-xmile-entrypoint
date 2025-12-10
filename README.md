@@ -16,4 +16,47 @@ This repo **does not contain bot features** — only the secure session scanner.
 ---
 
 ## 📁 Repository Structure
+dead-xmile-entrypoint/
+│
+├── README.md
+├── package.json
+├── package-lock.json
+├── .gitignore
+│
+├── src/
+│ ├── index.js
+│ ├── server.js
+│ ├── qr/
+│ │ ├── generate.js
+│ │ └── display.js
+│ │
+│ ├── session/
+│ │ ├── save.js
+│ │ ├── load.js
+│ │ ├── delete.js
+│ │ └── validate.js
+│ │
+│ ├── utils/
+│ │ ├── logger.js
+│ │ ├── colors.js
+│ │ ├── banners.js
+│ │ └── response.js
+│ │
+│ └── routes/
+│ ├── qr.js
+│ └── session.js
+│
+├── public/
+│ ├── css/style.css
+│ ├── js/app.js
+│ ├── img/logo.png
+│ └── index.html
+│
+├── temp/
+│ └── session.json
+│
+└── deploy/
+├── dockerfile
+├── ecosystem.config.js
+└── vercel.json
 

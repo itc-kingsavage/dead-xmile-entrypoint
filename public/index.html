@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DEAD-XMILE | Session Scanner</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="./css/style.css">
+
+    <style>
+        body {
+            background: #000;
+            margin: 0;
+            font-family: "Courier New", monospace;
+            color: #00ff9d;
+            text-align: center;
+            padding: 20px;
+        }
+
+        #logo {
+            width: 120px;
+            margin-top: 25px;
+            filter: drop-shadow(0 0 10px #00ffea);
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-top: 10px;
+            text-shadow: 0 0 8px #00ffea;
+        }
+
+        .loader {
+            color: #00ffea;
+            font-size: 14px;
+            margin: 15px 0;
+            animation: blink 1.2s infinite alternate;
+        }
+
+        @keyframes blink {
+            from { opacity: 0.2; }
+            to   { opacity: 1; }
+        }
+
+        #qrBox {
+            margin-top: 20px;
+        }
+
+        #pairing {
+            margin-top: 15px;
+            font-size: 16px;
+            color: #00d2ff;
+        }
+    </style>
+</head>
+
+<body>
+
+    <img id="logo" src="./img/logo.png" alt="Scanner Logo">
+
+    <h1>🔥 DEAD-X-BOT SCANNER 🔥</h1>
+    <p>Generate QR & Pairing Code to link your WhatsApp session</p>
+
+    <div class="loader">Initializing scanner...</div>
+
+    <div id="qrBox"></div>
+    <div id="pairing"></div>
+
+    <script src="./js/app.js"></script>
+</body>
+</html>

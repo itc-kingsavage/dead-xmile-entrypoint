@@ -1,30 +1,30 @@
 // src/routes/qr.js
-
-const express = require("express");
+import express from "express";
 const router = express.Router();
 
-const generateQR = require("../qr/generate");
-const displayQR = require("../qr/display");
-const response = require("../utils/response");
-const logger = require("../utils/logger");
+import generateQR from "../qr/generate.js";
+import displayQR from "../qr/display.js";
+import response from "../utils/response.js";
+import logger from "../utils/logger.js";
 
 router.get("/", async (req, res) => {
-    try {
-        logger.info("Request received: /qr");
+  try {
+    logger.info("Request received: /qr");
 
-        const qr = await generateQR();
+    // generateQR should return base64 data URL or null
+    const qr = await generateQR();
 
-        // Display QR locally on terminal
-        await displayQR(qr);
-
-        return response.success(res, "QR generated successfully!", {
-            qr
-        });
-
-    } catch (error) {
-        logger.error("QR generation failed:", error);
-        return response.error(res, "Failed to generate QR", error);
+    if (!qr) {
+      return response.error(res, "Failed to generate QR");
     }
+
+    // displayQR expects (qrImage, res) in your earlier version — but our displayQR returns formatted JSON:
+    // If your displayQR sends response itself, call it; otherwise return response here.
+    return response.success(res, "QR generated successfully!", { qr });
+  } catch (error) {
+    logger.error("QR generation failed: " + (error?.message || error));
+    return response.error(res, "Failed to generate QR", 500);
+  }
 });
 
-module.exports = router;
+export default router;

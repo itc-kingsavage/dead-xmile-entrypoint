@@ -1,33 +1,50 @@
 // src/utils/colors.js
+// Single canonical colors utility with helpers used by logger and server
 
-export default {
-    reset: "\x1b[0m",
-    bright: "\x1b[1m",
-    dim: "\x1b[2m",
-    underscore: "\x1b[4m",
-    blink: "\x1b[5m",
-    reverse: "\x1b[7m",
-    hidden: "\x1b[8m",
+export const RESET = "\x1b[0m";
+export const DIM = "\x1b[2m";
 
-    fg: {
-        black: "\x1b[30m",
-        red: "\x1b[31m",
-        green: "\x1b[32m",
-        yellow: "\x1b[33m",
-        blue: "\x1b[34m",
-        magenta: "\x1b[35m",
-        cyan: "\x1b[36m",
-        white: "\x1b[37m",
-    },
-
-    bg: {
-        black: "\x1b[40m",
-        red: "\x1b[41m",
-        green: "\x1b[42m",
-        yellow: "\x1b[43m",
-        blue: "\x1b[44m",
-        magenta: "\x1b[45m",
-        cyan: "\x1b[46m",
-        white: "\x1b[47m",
-    }
+export const FG = {
+  black: "\x1b[30m",
+  red: "\x1b[31m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  magenta: "\x1b[35m",
+  cyan: "\x1b[36m",
+  white: "\x1b[37m",
 };
+
+export function colorize(text, color) {
+  return `${color}${text}${RESET}`;
+}
+
+export function cyanText(text) {
+  return colorize(text, FG.cyan);
+}
+export function greenText(text) {
+  return colorize(text, FG.green);
+}
+export function yellowText(text) {
+  return colorize(text, FG.yellow);
+}
+export function redText(text) {
+  return colorize(text, FG.red);
+}
+export function dim(text) {
+  return `${DIM}${text}${RESET}`;
+}
+
+// Backwards-compatible object (import default)
+const defaultExport = {
+  RESET,
+  DIM,
+  FG,
+  colorize,
+  cyanText,
+  greenText,
+  yellowText,
+  redText,
+  dim,
+};
+export default defaultExport;

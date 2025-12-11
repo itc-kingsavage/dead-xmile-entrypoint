@@ -2,11 +2,13 @@
 
 import colors from "./colors.js";
 
+// Timestamp formatter
 const timestamp = () => {
     const now = new Date();
     return now.toISOString().replace("T", " ").split(".")[0];
 };
 
+// Main logger object
 const logger = {
     info: (msg) => {
         console.log(
@@ -38,4 +40,12 @@ const logger = {
     }
 };
 
+// --- Named Exports so Render stops complaining ---
+export const info = logger.info;
+export const success = logger.success;
+export const warn = logger.warn;
+export const error = logger.error;
+export const custom = logger.custom;
+
+// Default export (keeps compatibility)
 export default logger;

@@ -1,8 +1,6 @@
 // src/index.js
 import { startServer } from "./server.js";
-import { logInfo } from "./utils/logger.js";
-import colors from "./utils/colors.js";
+import logger from "./utils/logger.js";
 
-logInfo(`${colors.CYAN}Booting DEAD-XMILE Scanner...${colors.RESET}`);
-
+logger.info("Booting DEAD-XMILE Scanner...");
 startServer();

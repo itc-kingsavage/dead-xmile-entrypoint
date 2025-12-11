@@ -1,18 +1,25 @@
 {
   "name": "scanner-backend",
   "version": "1.0.0",
-  "description": "Simple Node.js backend for scanner app",
+  "description": "Backend API for the scanner system",
+  "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js"
   },
   "keywords": [],
-  "author": "",
+  "author": "KING SAVAGE",
   "license": "MIT",
   "dependencies": {
     "cors": "^2.8.5",
-    "express": "^4.19.2"
+    "colors": "^1.4.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.1.0",
+    "helmet": "^7.0.0",
+    "mongoose": "^8.2.0",
+    "morgan": "^1.10.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"

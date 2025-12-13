@@ -33,50 +33,63 @@
 
   </div>
 
-  <script>
-    const qrImg = document.getElementById("qrImage");
-    const statusText = document.getElementById("status");
-    const sessionBox = document.getElementById("sessionBox");
-    const sessionInput = document.getElementById("sessionId");
-    const copyBtn = document.getElementById("copyBtn");
-    const regenBtn = document.getElementById("regenBtn");
+<script>
+const qrImg = document.getElementById("qrImage");
+const statusText = document.getElementById("status");
+const sessionBox = document.getElementById("sessionBox");
+const sessionInput = document.getElementById("sessionId");
+const copyBtn = document.getElementById("copyBtn");
+const regenBtn = document.getElementById("regenBtn");
 
-    async function generateQR() {
-      statusText.innerText = "Generating QR...";
-      qrImg.style.display = "none";
-      sessionBox.style.display = "none";
+let busy = false;
 
-      try {
-        const res = await fetch("/qr");
-        const data = await res.json();
+async function generateQR() {
+  if (busy) return;
+  busy = true;
 
-        if (!data.success) {
-          statusText.innerText = "Error: " + (data.error || "QR generation failed");
-          return;
-        }
+  statusText.innerText = "Generating QR...";
+  qrImg.style.display = "none";
+  sessionBox.style.display = "none";
 
-        qrImg.src = data.qr;
-        qrImg.style.display = "block";
+  try {
+    const res = await fetch("/qr");
+    const data = await res.json();
 
-        sessionInput.value = data.sessionId;
-        sessionBox.style.display = "block";
-
-        statusText.innerText = `Scan QR within ${data.expiresIn / 1000}s`;
-
-      } catch (err) {
-        statusText.innerText = "Network error. Try again.";
-      }
+    if (!data.success) {
+      statusText.innerText = data.error || "Failed to generate QR";
+      busy = false;
+      return;
     }
 
-    copyBtn.onclick = () => {
-      sessionInput.select();
-      document.execCommand("copy");
-      statusText.innerText = "Session ID copied ✓";
-    };
+    qrImg.src = data.qr;
+    qrImg.style.display = "block";
 
-    regenBtn.onclick = generateQR;
+    sessionInput.value = data.sessionId;
+    sessionBox.style.display = "block";
 
-    generateQR();
-  </script>
+    statusText.innerText = `Scan QR within ${data.expiresIn / 1000}s`;
+
+  } catch (err) {
+    statusText.innerText = "Network error. Try again later.";
+  }
+
+  setTimeout(() => {
+    busy = false;
+  }, 3000);
+}
+
+copyBtn.onclick = () => {
+  sessionInput.select();
+  document.execCommand("copy");
+  statusText.innerText = "Session ID copied ✓";
+};
+
+regenBtn.onclick = () => {
+  generateQR();
+};
+
+// ❌ REMOVE auto-call
+// generateQR();
+</script>
 </body>
 </html>

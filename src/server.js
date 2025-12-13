@@ -8,7 +8,7 @@ import showBanner from "./utils/banners.js";
 
 const app = express();
 
-// ES module dirname fix
+// Fix __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -16,14 +16,14 @@ const __dirname = path.dirname(__filename);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Static frontend
+// Serve frontend
 app.use(express.static(path.join(__dirname, "../public")));
 
 // Routes
-app.use("/qr", qrRoutes);
+app.use("/qr", qrRoutes);          // QR + Pairing
 app.use("/session", sessionRoutes);
 
-// Home
+// Home page
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "../public/index.html"));
 });
@@ -34,7 +34,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   try {
     showBanner();
-  } catch {}
+  } catch (e) {}
 
   logger.info(`Scanner server running on port ${PORT}`);
 });

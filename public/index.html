@@ -80,5 +80,52 @@
 
   <button id="regenBtn">Generate New QR</button>
 </div> 
+   <script>
+const qrImg = document.getElementById("qrImage");
+const statusText = document.getElementById("status");
+const sessionBox = document.getElementById("sessionBox");
+const sessionInput = document.getElementById("sessionId");
+const copyBtn = document.getElementById("copyBtn");
+const regenBtn = document.getElementById("regenBtn");
+
+async function generateQR() {
+  statusText.innerText = "Generating QR...";
+  qrImg.style.display = "none";
+  sessionBox.style.display = "none";
+
+  try {
+    const res = await fetch("/qr");
+    const data = await res.json();
+
+    if (!data.success) {
+      statusText.innerText = "Error: " + (data.error || "QR failed");
+      return;
+    }
+
+    qrImg.src = data.qr;
+    qrImg.style.display = "block";
+
+    sessionInput.value = data.sessionId;
+    sessionBox.style.display = "block";
+
+    statusText.innerText = `Scan QR within ${data.expiresIn / 1000}s`;
+
+  } catch (err) {
+    statusText.innerText = "Network error. Try again.";
+  }
+}
+
+copyBtn.onclick = () => {
+  sessionInput.select();
+  document.execCommand("copy");
+  statusText.innerText = "Session ID copied ✓";
+};
+
+regenBtn.onclick = () => {
+  generateQR();
+};
+
+generateQR();
+</script> 
 </body>
 </html>

@@ -1,15 +1,20 @@
-import makeWASocket, { useMultiFileAuthState } from "@whiskeysockets/baileys";
+import makeWASocket, {
+  useMultiFileAuthState,
+  DisconnectReason
+} from "@whiskeysockets/baileys";
 import QRCode from "qrcode";
 import { randomUUID } from "crypto";
 
+const QR_TIMEOUT = 60_000; // 1 minute
+
 export async function generateQR(req, res) {
-  const sessionId = `dead-xmile-${randomUUID().slice(0, 8)}`;
-
   let responded = false;
+  let timeout;
 
-  const { state, saveCreds } = await useMultiFileAuthState(
-    `./auth/${sessionId}`
-  );
+  const sessionId = `dead-xmile-session;;;${randomUUID().slice(0, 8)}`;
+  const authPath = `./auth/${sessionId}`;
+
+  const { state, saveCreds } = await useMultiFileAuthState(authPath);
 
   const sock = makeWASocket({
     auth: state,
@@ -17,37 +22,64 @@ export async function generateQR(req, res) {
     browser: ["Ubuntu", "Chrome", "22.04"]
   });
 
-  sock.ev.on("connection.update", async (update) => {
-    const { qr, connection } = update;
+  // 🔐 Save creds
+  sock.ev.on("creds.update", saveCreds);
 
+  sock.ev.on("connection.update", async (update) => {
+    const { qr, connection, lastDisconnect } = update;
+
+    // 📸 SEND QR ONCE
     if (qr && !responded) {
       responded = true;
+      clearTimeout(timeout);
 
-      const qrBase64 = await QRCode.toDataURL(qr);
+      const qrImage = await QRCode.toDataURL(qr);
 
-      res.json({
+      return res.json({
         success: true,
-        qr: qrBase64,
+        qr: qrImage,
         sessionId,
-        expiresIn: 60000
+        expiresIn: QR_TIMEOUT
       });
     }
 
+    // ✅ LOGIN SUCCESS
     if (connection === "open") {
       console.log("✅ WhatsApp linked:", sessionId);
+      clearTimeout(timeout);
+    }
+
+    // ❌ CLOSED CONNECTION
+    if (connection === "close") {
+      const reason =
+        lastDisconnect?.error?.output?.statusCode || "unknown";
+
+      console.warn("⚠️ Connection closed:", reason);
+
+      if (
+        !responded &&
+        reason !== DisconnectReason.loggedOut
+      ) {
+        responded = true;
+        clearTimeout(timeout);
+
+        return res.json({
+          success: false,
+          error: "QR expired. Please generate a new one."
+        });
+      }
     }
   });
 
-  sock.ev.on("creds.update", saveCreds);
-
-  // ⏱ safety timeout
-  setTimeout(() => {
+  // ⏱ SAFETY TIMEOUT (prevents Render crash)
+  timeout = setTimeout(() => {
     if (!responded) {
       responded = true;
+
       res.json({
         success: false,
-        error: "QR not received, try again"
+        error: "QR timeout. Please try again."
       });
     }
-  }, 65000);
+  }, QR_TIMEOUT);
 }

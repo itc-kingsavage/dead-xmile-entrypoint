@@ -126,3 +126,28 @@ button {
   padding: 10px 15px;
   cursor: pointer;
 }
+/* Background image reused for pairing */
+.bg {
+  position: fixed;
+  inset: 0;
+  background: url("../img/logo.png") center / 300px no-repeat;
+  opacity: 0.08;
+  z-index: -1;
+}
+
+/* Mode switch */
+.mode-switch {
+  margin-bottom: 10px;
+}
+
+.mode-switch button {
+  margin: 4px;
+}
+
+/* Pairing input */
+#phoneInput {
+  width: 90%;
+  padding: 10px;
+  margin-top: 10px;
+  text-align: center;
+}

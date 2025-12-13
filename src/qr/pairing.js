@@ -1,7 +1,6 @@
-import makeWASocket, {
-  useMultiFileAuthState
-} from "@whiskeysockets/baileys";
+import makeWASocket from "@whiskeysockets/baileys";
 import { randomUUID } from "crypto";
+import { useMongoAuthState } from "../db/mongoAuth.js"; // 👈 custom Mongo auth
 
 /*
   POST /qr?mode=pair
@@ -9,6 +8,9 @@ import { randomUUID } from "crypto";
 */
 
 export async function generatePairingCode(req, res) {
+  let sock;
+  let timeout;
+
   try {
     const { phone } = req.body;
 
@@ -19,7 +21,7 @@ export async function generatePairingCode(req, res) {
       });
     }
 
-    // WhatsApp requires international format, numbers only
+    // digits only (international format)
     const cleanPhone = phone.replace(/\D/g, "");
 
     if (cleanPhone.length < 10) {
@@ -29,30 +31,35 @@ export async function generatePairingCode(req, res) {
       });
     }
 
+    // 🔐 session id (ADMIN will use this)
     const sessionId = `dead-xmile-${randomUUID().slice(0, 8)}`;
-    const sessionPath = `./auth/${sessionId}`;
 
-    const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
+    // 📦 MongoDB auth state
+    const { state, saveCreds } = await useMongoAuthState(sessionId);
 
-    const sock = makeWASocket({
+    sock = makeWASocket({
       auth: state,
       printQRInTerminal: false,
       browser: ["Ubuntu", "Chrome", "22.04"]
     });
 
-    let responded = false;
+    // ⏱ safety timeout (90s)
+    timeout = setTimeout(() => {
+      try {
+        sock.end();
+      } catch {}
+    }, 90000);
 
-    // Generate pairing code (WhatsApp = 8 digits)
+    // 🔢 request 8-digit pairing code
     const pairingCode = await sock.requestPairingCode(cleanPhone);
-
-    responded = true;
 
     res.json({
       success: true,
       mode: "pairing",
-      pairingCode,          // 8-digit code
+      pairingCode,
       sessionId,
       phone: cleanPhone,
+      expiresIn: 90000,
       instructions:
         "Open WhatsApp → Linked Devices → Link a device → Link with phone number"
     });
@@ -61,6 +68,7 @@ export async function generatePairingCode(req, res) {
       const { connection, lastDisconnect } = update;
 
       if (connection === "open") {
+        clearTimeout(timeout);
         console.log("✅ WhatsApp paired:", sessionId);
       }
 
@@ -75,9 +83,17 @@ export async function generatePairingCode(req, res) {
   } catch (err) {
     console.error("Pairing error:", err);
 
-    res.status(500).json({
-      success: false,
-      error: "Failed to generate pairing code"
-    });
+    try {
+      sock?.end();
+    } catch {}
+
+    clearTimeout(timeout);
+
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        error: "Failed to generate pairing code"
+      });
+    }
   }
 }

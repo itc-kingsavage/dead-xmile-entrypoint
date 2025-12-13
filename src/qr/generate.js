@@ -1,47 +1,53 @@
-import makeWASocket from "@whiskeysockets/baileys";
-import qrcode from "qrcode";
+import makeWASocket, { useMultiFileAuthState } from "@whiskeysockets/baileys";
+import QRCode from "qrcode";
 import { randomUUID } from "crypto";
-import { connectMongo } from "../db/mongo.js";
-import { useMongoAuthState } from "../session/mongoAuth.js";
 
-const QR_TIMEOUT = 60000;
-
-export async function generateQR(res) {
+export async function generateQR(req, res) {
   const sessionId = `dead-xmile-${randomUUID().slice(0, 8)}`;
-
-  const db = await connectMongo();
-  const sessions = db.collection("sessions");
-
-  const { state, saveCreds } = await useMongoAuthState(sessions, sessionId);
-
-  const sock = makeWASocket({
-    auth: state,
-    printQRInTerminal: false
-  });
 
   let responded = false;
 
-  sock.ev.on("connection.update", async ({ qr }) => {
+  const { state, saveCreds } = await useMultiFileAuthState(
+    `./auth/${sessionId}`
+  );
+
+  const sock = makeWASocket({
+    auth: state,
+    printQRInTerminal: false,
+    browser: ["Ubuntu", "Chrome", "22.04"]
+  });
+
+  sock.ev.on("connection.update", async (update) => {
+    const { qr, connection } = update;
+
     if (qr && !responded) {
       responded = true;
 
-      const qrImage = await qrcode.toDataURL(qr);
+      const qrBase64 = await QRCode.toDataURL(qr);
 
       res.json({
         success: true,
-        qr: qrImage,
+        qr: qrBase64,
         sessionId,
-        expiresIn: QR_TIMEOUT
+        expiresIn: 60000
       });
+    }
+
+    if (connection === "open") {
+      console.log("✅ WhatsApp linked:", sessionId);
     }
   });
 
   sock.ev.on("creds.update", saveCreds);
 
+  // ⏱ safety timeout
   setTimeout(() => {
     if (!responded) {
       responded = true;
-      res.json({ success: false, error: "QR timeout" });
+      res.json({
+        success: false,
+        error: "QR not received, try again"
+      });
     }
-  }, QR_TIMEOUT);
+  }, 65000);
 }

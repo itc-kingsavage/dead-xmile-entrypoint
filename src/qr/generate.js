@@ -1,16 +1,18 @@
-import makeWASocket, { useMultiFileAuthState } from "@whiskeysockets/baileys";
+import makeWASocket from "@whiskeysockets/baileys";
 import qrcode from "qrcode";
-import path from "path";
-import logger from "../utils/logger.js";
-import { generateSessionId } from "../session/store.js";
+import { randomUUID } from "crypto";
+import { connectMongo } from "../db/mongo.js";
+import { useMongoAuthState } from "../session/mongoAuth.js";
 
-const QR_TIMEOUT = Number(process.env.QR_TIMEOUT_MS || 60000);
+const QR_TIMEOUT = 60000;
 
 export async function generateQR(res) {
-  const sessionId = generateSessionId();
-  const sessionDir = path.join("src/sessions", sessionId);
+  const sessionId = `dead-xmile-${randomUUID().slice(0, 8)}`;
 
-  const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+  const db = await connectMongo();
+  const sessions = db.collection("sessions");
+
+  const { state, saveCreds } = await useMongoAuthState(sessions, sessionId);
 
   const sock = makeWASocket({
     auth: state,
@@ -27,12 +29,19 @@ export async function generateQR(res) {
 
       res.json({
         success: true,
-        sessionId,
         qr: qrImage,
+        sessionId,
         expiresIn: QR_TIMEOUT
       });
     }
   });
 
   sock.ev.on("creds.update", saveCreds);
+
+  setTimeout(() => {
+    if (!responded) {
+      responded = true;
+      res.json({ success: false, error: "QR timeout" });
+    }
+  }, QR_TIMEOUT);
 }

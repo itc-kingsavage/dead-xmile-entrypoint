@@ -11,17 +11,39 @@
 
 <body>
 
+  <!-- Background image reused for pairing -->
+  <div class="bg"></div>
+
   <img id="logo" src="./img/logo.png" alt="Scanner Logo">
 
   <h1>🔥 DEAD-X-BOT SCANNER 🔥</h1>
-  <p>Generate QR & Pairing Code to link your WhatsApp session</p>
+  <p>Generate QR or Pairing Code to link WhatsApp</p>
 
   <div class="scanner-box">
 
-    <p id="status" class="loader">Initializing scanner...</p>
+    <!-- MODE BUTTONS -->
+    <div class="mode-switch">
+      <button onclick="switchMode('qr')">QR MODE</button>
+      <button onclick="switchMode('pair')">PAIR MODE</button>
+    </div>
 
+    <p id="status" class="loader">Select a mode to continue</p>
+
+    <!-- QR IMAGE -->
     <img id="qrImage" style="display:none;" />
 
+    <!-- PAIRING -->
+    <div id="pairBox" style="display:none;">
+      <input id="phoneInput" placeholder="2557XXXXXXXX" />
+      <button onclick="generatePairing()">Generate Pairing Code</button>
+
+      <div id="pairCodeBox" style="display:none;">
+        <p><b>Pairing Code</b></p>
+        <h2 id="pairCode"></h2>
+      </div>
+    </div>
+
+    <!-- SESSION -->
     <div id="sessionBox" style="display:none;">
       <p><b>Session ID</b></p>
       <input id="sessionId" readonly />
@@ -29,7 +51,7 @@
       <button id="copyBtn">Copy Session ID</button>
     </div>
 
-    <button id="regenBtn">Generate New QR</button>
+    <button id="regenBtn" onclick="generateQR()">Generate New QR</button>
 
   </div>
 
@@ -41,7 +63,34 @@ const sessionInput = document.getElementById("sessionId");
 const copyBtn = document.getElementById("copyBtn");
 const regenBtn = document.getElementById("regenBtn");
 
+const pairBox = document.getElementById("pairBox");
+const phoneInput = document.getElementById("phoneInput");
+const pairCodeBox = document.getElementById("pairCodeBox");
+const pairCodeText = document.getElementById("pairCode");
+
+let mode = "qr";
 let busy = false;
+
+function switchMode(m) {
+  mode = m;
+
+  qrImg.style.display = "none";
+  pairBox.style.display = "none";
+  pairCodeBox.style.display = "none";
+  sessionBox.style.display = "none";
+
+  statusText.innerText =
+    m === "qr"
+      ? "Click Generate QR"
+      : "Enter phone number to pair";
+
+  if (m === "pair") {
+    pairBox.style.display = "block";
+    regenBtn.style.display = "none";
+  } else {
+    regenBtn.style.display = "inline-block";
+  }
+}
 
 async function generateQR() {
   if (busy) return;
@@ -52,7 +101,7 @@ async function generateQR() {
   sessionBox.style.display = "none";
 
   try {
-    const res = await fetch("/qr");
+    const res = await fetch("/qr?mode=qr");
     const data = await res.json();
 
     if (!data.success) {
@@ -69,13 +118,48 @@ async function generateQR() {
 
     statusText.innerText = `Scan QR within ${data.expiresIn / 1000}s`;
 
-  } catch (err) {
-    statusText.innerText = "Network error. Try again later.";
+  } catch {
+    statusText.innerText = "Network error";
   }
 
-  setTimeout(() => {
-    busy = false;
-  }, 3000);
+  setTimeout(() => busy = false, 3000);
+}
+
+async function generatePairing() {
+  const phone = phoneInput.value.trim();
+  if (!phone) {
+    statusText.innerText = "Enter phone number";
+    return;
+  }
+
+  statusText.innerText = "Generating pairing code...";
+  pairCodeBox.style.display = "none";
+
+  try {
+    const res = await fetch("/qr?mode=pair", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone })
+    });
+
+    const data = await res.json();
+
+    if (!data.success) {
+      statusText.innerText = data.error;
+      return;
+    }
+
+    pairCodeText.innerText = data.pairingCode;
+    pairCodeBox.style.display = "block";
+
+    sessionInput.value = data.sessionId;
+    sessionBox.style.display = "block";
+
+    statusText.innerText = "Enter code in WhatsApp";
+
+  } catch {
+    statusText.innerText = "Network error";
+  }
 }
 
 copyBtn.onclick = () => {
@@ -83,13 +167,6 @@ copyBtn.onclick = () => {
   document.execCommand("copy");
   statusText.innerText = "Session ID copied ✓";
 };
-
-regenBtn.onclick = () => {
-  generateQR();
-};
-
-// ❌ REMOVE auto-call
-// generateQR();
 </script>
 </body>
 </html>

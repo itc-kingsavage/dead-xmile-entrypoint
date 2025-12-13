@@ -1,57 +1,67 @@
-// src/qr/generate.js
+import makeWASocket, {
+  useMultiFileAuthState,
+  DisconnectReason
+} from "@whiskeysockets/baileys";
 
-import makeWASocket, { useMultiFileAuthState } from "@whiskeysockets/baileys";
 import qrcode from "qrcode";
+import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
 import logger from "../utils/logger.js";
-import banners from "../utils/banners.js";
+import { generateSessionId } from "../session/store.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const QR_TIMEOUT = Number(process.env.QR_TIMEOUT_MS || 60000);
 
-export default async function generateQR(callback) {
-    try {
-        logger.info("Preparing authentication state...");
+export async function generateQR(res) {
+  const sessionId = generateSessionId();
+  const sessionDir = path.join("src/sessions", sessionId);
 
-        const authDir = path.join(__dirname, "../../temp/auth_info");
+  const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
 
-        const { state, saveCreds } = await useMultiFileAuthState(authDir);
+  const sock = makeWASocket({
+    auth: state,
+    printQRInTerminal: false
+  });
 
-        const sock = makeWASocket({
-            printQRInTerminal: false,
-            auth: state,
-        });
+  let qrTimeout;
 
-        sock.ev.on("connection.update", async (update) => {
-            const { qr, connection, lastDisconnect } = update;
+  sock.ev.on("connection.update", async (update) => {
+    const { qr, connection, lastDisconnect } = update;
 
-            if (qr) {
-                logger.info("QR Code generated. Preparing display...");
-                logger.success("QR Code ready. Sending to frontend...");
-                console.log(banners.qrReady);
+    if (qr) {
+      logger.info("QR generated");
 
-                // Convert QR to Data URL (base64 image)
-                const qrImage = await qrcode.toDataURL(qr);
-                callback(qrImage);
-            }
+      clearTimeout(qrTimeout);
 
-            if (connection === "open") {
-                logger.success("Client connected successfully!");
-                await saveCreds();
-            }
+      qrTimeout = setTimeout(() => {
+        logger.warn("QR expired, regenerating...");
+        sock.ws.close();
+      }, QR_TIMEOUT);
 
-            if (connection === "close") {
-                logger.warn(
-                    "Connection closed. Reason: " +
-                        (lastDisconnect?.error?.message || "Unknown")
-                );
-            }
-        });
-
-        sock.ev.on("creds.update", saveCreds);
-    } catch (err) {
-        logger.error("QR Generation failed: " + err.message);
-        callback(null, err);
+      const qrImage = await qrcode.toDataURL(qr);
+      return res.json({
+        success: true,
+        sessionId,
+        qr: qrImage,
+        expiresIn: QR_TIMEOUT
+      });
     }
-}
+
+    if (connection === "open") {
+      logger.success(`Logged in: ${sessionId}`);
+      clearTimeout(qrTimeout);
+    }
+
+    if (connection === "close") {
+      const reason = lastDisconnect?.error?.output?.statusCode;
+
+      logger.warn(`Connection closed: ${reason}`);
+
+      if (reason !== DisconnectReason.loggedOut) {
+        logger.info("Attempting reconnect...");
+        generateQR(res);
+      }
+    }
+  });
+
+  sock.ev.on("creds.update", saveCreds);
+                   }

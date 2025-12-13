@@ -1,4 +1,3 @@
-// src/server.js
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -9,7 +8,7 @@ import showBanner from "./utils/banners.js";
 
 const app = express();
 
-// Resolve __dirname in ES modules
+// ES module dirname fix
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -17,34 +16,27 @@ const __dirname = path.dirname(__filename);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Static files
+// Static frontend
 app.use(express.static(path.join(__dirname, "../public")));
 
 // Routes
 app.use("/qr", qrRoutes);
 app.use("/session", sessionRoutes);
 
-// Root route
+// Home
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "../public/index.html"));
 });
 
-// Start server function
-export const startServer = () => {
-  const PORT = process.env.PORT || 3000;
+// Start server
+const PORT = process.env.PORT || 3000;
 
-  app.listen(PORT, () => {
-    try {
-      showBanner();
-    } catch (err) {
-      // banner is optional
-    }
+app.listen(PORT, () => {
+  try {
+    showBanner();
+  } catch {}
 
-    logger.info(`Scanner server running on port ${PORT}`);
-  });
-};
-
-// 🚀 IMPORTANT: auto-start server when file is run
-startServer();
+  logger.info(`Scanner server running on port ${PORT}`);
+});
 
 export default app;

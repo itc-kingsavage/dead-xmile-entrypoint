@@ -18,12 +18,11 @@ export async function generateQR(res) {
 
   let responded = false;
   let qrTimeout;
-  let sock;
 
   try {
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
 
-    sock = makeWASocket({
+    const sock = makeWASocket({
       auth: state,
       printQRInTerminal: false
     });
@@ -31,14 +30,15 @@ export async function generateQR(res) {
     sock.ev.on("connection.update", async (update) => {
       const { qr, connection, lastDisconnect } = update;
 
-      // ---------- QR GENERATED ----------
+      // ✅ SEND QR ONCE
       if (qr && !responded) {
         responded = true;
+
         logger.info(`QR generated for ${sessionId}`);
 
         qrTimeout = setTimeout(() => {
-          logger.warn("QR expired, closing socket...");
-          sock?.ws?.close();
+          logger.warn("QR expired");
+          sock.ws.close();
         }, QR_TIMEOUT);
 
         const qrImage = await qrcode.toDataURL(qr);
@@ -51,29 +51,24 @@ export async function generateQR(res) {
         });
       }
 
-      // ---------- CONNECTED ----------
+      // ✅ LOGIN SUCCESS
       if (connection === "open") {
-        logger.success(`WhatsApp logged in: ${sessionId}`);
+        logger.success(`Logged in: ${sessionId}`);
         clearTimeout(qrTimeout);
       }
 
-      // ---------- DISCONNECTED ----------
-      if (connection === "close") {
-        const reason =
-          lastDisconnect?.error?.output?.statusCode ||
-          DisconnectReason.connectionClosed;
-
-        logger.warn(`Connection closed (${reason}) for ${sessionId}`);
+      // ❌ FAILED BEFORE QR
+      if (connection === "close" && !responded) {
+        const reason = lastDisconnect?.error?.output?.statusCode;
+        logger.warn(`Connection closed (${reason}) before QR`);
 
         clearTimeout(qrTimeout);
 
-        // Auto-regenerate ONLY if QR was not scanned yet
-        if (
-          !responded &&
-          reason !== DisconnectReason.loggedOut
-        ) {
-          logger.info("Auto-regenerating QR...");
-          return generateQR(res);
+        if (!res.headersSent) {
+          res.status(503).json({
+            success: false,
+            error: "QR generation failed, please retry"
+          });
         }
       }
     });
@@ -81,12 +76,12 @@ export async function generateQR(res) {
     sock.ev.on("creds.update", saveCreds);
 
   } catch (err) {
-    logger.error("QR generation failed");
+    logger.error(err);
 
     if (!res.headersSent) {
       res.status(500).json({
         success: false,
-        error: "Failed to generate QR"
+        error: "Internal error"
       });
     }
   }

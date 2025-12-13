@@ -5,13 +5,16 @@ const router = express.Router();
 
 router.get("/", async (req, res) => {
   try {
-    await generateQR(res);
+    await generateQR(req, res);
   } catch (err) {
     console.error(err);
-    res.status(500).json({
-      success: false,
-      error: "Failed to generate QR"
-    });
+
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        error: "Failed to generate QR"
+      });
+    }
   }
 });
 

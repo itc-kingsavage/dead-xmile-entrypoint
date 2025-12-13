@@ -104,3 +104,25 @@ button:hover {
         font-size: 20px;
     }
 }
+.scanner-box {
+  text-align: center;
+  padding: 20px;
+}
+
+#qrImage {
+  width: 260px;
+  margin: 15px auto;
+  display: block;
+}
+
+#sessionId {
+  width: 90%;
+  padding: 8px;
+  text-align: center;
+}
+
+button {
+  margin: 8px;
+  padding: 10px 15px;
+  cursor: pointer;
+}

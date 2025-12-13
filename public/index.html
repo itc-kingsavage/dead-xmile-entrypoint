@@ -1,131 +1,83 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>DEAD-XMILE | Session Scanner</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <title>DEAD-XMILE | Session Scanner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <!-- Styles -->
-    <link rel="stylesheet" href="./css/style.css">
-
-    <style>
-        body {
-            background: #000;
-            margin: 0;
-            font-family: "Courier New", monospace;
-            color: #00ff9d;
-            text-align: center;
-            padding: 20px;
-        }
-
-        #logo {
-            width: 120px;
-            margin-top: 25px;
-            filter: drop-shadow(0 0 10px #00ffea);
-        }
-
-        h1 {
-            font-size: 24px;
-            margin-top: 10px;
-            text-shadow: 0 0 8px #00ffea;
-        }
-
-        .loader {
-            color: #00ffea;
-            font-size: 14px;
-            margin: 15px 0;
-            animation: blink 1.2s infinite alternate;
-        }
-
-        @keyframes blink {
-            from { opacity: 0.2; }
-            to   { opacity: 1; }
-        }
-
-        #qrBox {
-            margin-top: 20px;
-        }
-
-        #pairing {
-            margin-top: 15px;
-            font-size: 16px;
-            color: #00d2ff;
-        }
-    </style>
+  <!-- Main Styles -->
+  <link rel="stylesheet" href="./css/style.css">
 </head>
 
 <body>
 
-    <img id="logo" src="./img/logo.png" alt="Scanner Logo">
+  <img id="logo" src="./img/logo.png" alt="Scanner Logo">
 
-    <h1>🔥 DEAD-X-BOT SCANNER 🔥</h1>
-    <p>Generate QR & Pairing Code to link your WhatsApp session</p>
+  <h1>🔥 DEAD-X-BOT SCANNER 🔥</h1>
+  <p>Generate QR & Pairing Code to link your WhatsApp session</p>
 
-    <div class="loader">Initializing scanner...</div>
+  <div class="scanner-box">
 
-    <div id="qrBox"></div>
-    <div id="pairing"></div>
+    <p id="status" class="loader">Initializing scanner...</p>
 
-    <script src="./js/app.js"></script>
-   <div class="scanner-box">
-  <img id="qrImage" style="display:none;" />
+    <img id="qrImage" style="display:none;" />
 
-  <p id="status">Scanner Ready ✓</p>
+    <div id="sessionBox" style="display:none;">
+      <p><b>Session ID</b></p>
+      <input id="sessionId" readonly />
+      <br>
+      <button id="copyBtn">Copy Session ID</button>
+    </div>
 
-  <div id="sessionBox" style="display:none;">
-    <p><b>Session ID</b></p>
-    <input id="sessionId" readonly />
-    <button id="copyBtn">Copy</button>
+    <button id="regenBtn">Generate New QR</button>
+
   </div>
 
-  <button id="regenBtn">Generate New QR</button>
-</div> 
-   <script>
-const qrImg = document.getElementById("qrImage");
-const statusText = document.getElementById("status");
-const sessionBox = document.getElementById("sessionBox");
-const sessionInput = document.getElementById("sessionId");
-const copyBtn = document.getElementById("copyBtn");
-const regenBtn = document.getElementById("regenBtn");
+  <script>
+    const qrImg = document.getElementById("qrImage");
+    const statusText = document.getElementById("status");
+    const sessionBox = document.getElementById("sessionBox");
+    const sessionInput = document.getElementById("sessionId");
+    const copyBtn = document.getElementById("copyBtn");
+    const regenBtn = document.getElementById("regenBtn");
 
-async function generateQR() {
-  statusText.innerText = "Generating QR...";
-  qrImg.style.display = "none";
-  sessionBox.style.display = "none";
+    async function generateQR() {
+      statusText.innerText = "Generating QR...";
+      qrImg.style.display = "none";
+      sessionBox.style.display = "none";
 
-  try {
-    const res = await fetch("/qr");
-    const data = await res.json();
+      try {
+        const res = await fetch("/qr");
+        const data = await res.json();
 
-    if (!data.success) {
-      statusText.innerText = "Error: " + (data.error || "QR failed");
-      return;
+        if (!data.success) {
+          statusText.innerText = "Error: " + (data.error || "QR generation failed");
+          return;
+        }
+
+        qrImg.src = data.qr;
+        qrImg.style.display = "block";
+
+        sessionInput.value = data.sessionId;
+        sessionBox.style.display = "block";
+
+        statusText.innerText = `Scan QR within ${data.expiresIn / 1000}s`;
+
+      } catch (err) {
+        statusText.innerText = "Network error. Try again.";
+      }
     }
 
-    qrImg.src = data.qr;
-    qrImg.style.display = "block";
+    copyBtn.onclick = () => {
+      sessionInput.select();
+      document.execCommand("copy");
+      statusText.innerText = "Session ID copied ✓";
+    };
 
-    sessionInput.value = data.sessionId;
-    sessionBox.style.display = "block";
+    regenBtn.onclick = generateQR;
 
-    statusText.innerText = `Scan QR within ${data.expiresIn / 1000}s`;
+    generateQR();
+  </script>
 
-  } catch (err) {
-    statusText.innerText = "Network error. Try again.";
-  }
-}
-
-copyBtn.onclick = () => {
-  sessionInput.select();
-  document.execCommand("copy");
-  statusText.innerText = "Session ID copied ✓";
-};
-
-regenBtn.onclick = () => {
-  generateQR();
-};
-
-generateQR();
-</script> 
 </body>
 </html>

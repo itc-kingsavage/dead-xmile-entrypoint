@@ -1,4 +1,5 @@
 import { connectMongo } from "./mongo.js";
+import { makeCacheableSignalKeyStore } from "@whiskeysockets/baileys";
 
 export async function useMongoAuthState(sessionId) {
   const db = await connectMongo();
@@ -6,8 +7,27 @@ export async function useMongoAuthState(sessionId) {
 
   const doc = await collection.findOne({ sessionId });
 
-  let creds = doc?.creds || null;
-  let keys = doc?.keys || {};
+  const creds = doc?.creds || null;
+  const storedKeys = doc?.keys || {};
+
+  const keys = makeCacheableSignalKeyStore(
+    {
+      get: (type, ids) => {
+        const data = {};
+        for (const id of ids) {
+          data[id] = storedKeys[type]?.[id];
+        }
+        return data;
+      },
+      set: (data) => {
+        for (const type in data) {
+          storedKeys[type] = storedKeys[type] || {};
+          Object.assign(storedKeys[type], data[type]);
+        }
+      }
+    },
+    console
+  );
 
   return {
     state: {
@@ -21,7 +41,7 @@ export async function useMongoAuthState(sessionId) {
           $set: {
             sessionId,
             creds: newCreds,
-            keys,
+            keys: storedKeys,
             updatedAt: new Date()
           }
         },

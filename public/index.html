@@ -67,5 +67,18 @@
     <div id="pairing"></div>
 
     <script src="./js/app.js"></script>
+   <div class="scanner-box">
+  <img id="qrImage" style="display:none;" />
+
+  <p id="status">Scanner Ready ✓</p>
+
+  <div id="sessionBox" style="display:none;">
+    <p><b>Session ID</b></p>
+    <input id="sessionId" readonly />
+    <button id="copyBtn">Copy</button>
+  </div>
+
+  <button id="regenBtn">Generate New QR</button>
+</div> 
 </body>
 </html>

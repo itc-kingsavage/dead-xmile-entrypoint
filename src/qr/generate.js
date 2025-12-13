@@ -5,16 +5,13 @@ import makeWASocket, {
 import QRCode from "qrcode";
 import { randomUUID } from "crypto";
 
-const QR_TIMEOUT = 60_000; // 1 minute
-
 export async function generateQR(req, res) {
+  const sessionId = `dead-xmile-${randomUUID().slice(0, 8)}`;
+  const sessionPath = `./auth/${sessionId}`;
+
   let responded = false;
-  let timeout;
 
-  const sessionId = `dead-xmile-session;;;${randomUUID().slice(0, 8)}`;
-  const authPath = `./auth/${sessionId}`;
-
-  const { state, saveCreds } = await useMultiFileAuthState(authPath);
+  const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
 
   const sock = makeWASocket({
     auth: state,
@@ -22,64 +19,52 @@ export async function generateQR(req, res) {
     browser: ["Ubuntu", "Chrome", "22.04"]
   });
 
-  // 🔐 Save creds
-  sock.ev.on("creds.update", saveCreds);
+  const timeout = setTimeout(() => {
+    if (!responded) {
+      responded = true;
+      sock.end();
+      res.json({
+        success: false,
+        error: "QR expired. Please generate a new one."
+      });
+    }
+  }, 90000); // ⬅️ 90 seconds
 
   sock.ev.on("connection.update", async (update) => {
     const { qr, connection, lastDisconnect } = update;
 
-    // 📸 SEND QR ONCE
     if (qr && !responded) {
       responded = true;
       clearTimeout(timeout);
 
-      const qrImage = await QRCode.toDataURL(qr);
+      const qrBase64 = await QRCode.toDataURL(qr);
 
-      return res.json({
+      res.json({
         success: true,
-        qr: qrImage,
+        qr: qrBase64,
         sessionId,
-        expiresIn: QR_TIMEOUT
+        expiresIn: 90000
       });
     }
 
-    // ✅ LOGIN SUCCESS
     if (connection === "open") {
       console.log("✅ WhatsApp linked:", sessionId);
-      clearTimeout(timeout);
     }
 
-    // ❌ CLOSED CONNECTION
     if (connection === "close") {
-      const reason =
-        lastDisconnect?.error?.output?.statusCode || "unknown";
+      const code = lastDisconnect?.error?.output?.statusCode;
+      console.warn("⚠️ Connection closed:", code);
 
-      console.warn("⚠️ Connection closed:", reason);
-
-      if (
-        !responded &&
-        reason !== DisconnectReason.loggedOut
-      ) {
+      if (!responded) {
         responded = true;
         clearTimeout(timeout);
-
-        return res.json({
+        res.json({
           success: false,
-          error: "QR expired. Please generate a new one."
+          error: "WhatsApp rejected connection. Try again later."
         });
       }
     }
   });
 
-  // ⏱ SAFETY TIMEOUT (prevents Render crash)
-  timeout = setTimeout(() => {
-    if (!responded) {
-      responded = true;
-
-      res.json({
-        success: false,
-        error: "QR timeout. Please try again."
-      });
-    }
-  }, QR_TIMEOUT);
+  sock.ev.on("creds.update", saveCreds);
 }

@@ -1,6 +1,6 @@
 import makeWASocket from "@whiskeysockets/baileys";
 import { randomUUID } from "crypto";
-import { useMongoAuthState } from "../db/mongoAuth.js"; // 👈 custom Mongo auth
+import { useMongoAuthState } from "../db/mongoAuth.js";
 
 /*
   POST /qr?mode=pair
@@ -9,7 +9,7 @@ import { useMongoAuthState } from "../db/mongoAuth.js"; // 👈 custom Mongo aut
 
 export async function generatePairingCode(req, res) {
   let sock;
-  let timeout;
+  let responded = false;
 
   try {
     const { phone } = req.body;
@@ -21,7 +21,7 @@ export async function generatePairingCode(req, res) {
       });
     }
 
-    // digits only (international format)
+    // ✅ WhatsApp requires international format (numbers only)
     const cleanPhone = phone.replace(/\D/g, "");
 
     if (cleanPhone.length < 10) {
@@ -31,44 +31,52 @@ export async function generatePairingCode(req, res) {
       });
     }
 
-    // 🔐 session id (ADMIN will use this)
     const sessionId = `dead-xmile-${randomUUID().slice(0, 8)}`;
 
-    // 📦 MongoDB auth state
+    // ✅ MongoDB auth state
     const { state, saveCreds } = await useMongoAuthState(sessionId);
 
     sock = makeWASocket({
       auth: state,
       printQRInTerminal: false,
-      browser: ["Ubuntu", "Chrome", "22.04"]
+      browser: ["Dead-Xmile", "Chrome", "1.0.0"]
     });
 
-    // ⏱ safety timeout (90s)
-    timeout = setTimeout(() => {
-      try {
+    // ⏱ Fail-safe timeout
+    const timeout = setTimeout(() => {
+      if (!responded) {
+        responded = true;
         sock.end();
-      } catch {}
+        res.json({
+          success: false,
+          error: "Pairing code expired. Try again."
+        });
+      }
     }, 90000);
 
-    // 🔢 request 8-digit pairing code
+    // ✅ Generate WhatsApp 8-digit pairing code
     const pairingCode = await sock.requestPairingCode(cleanPhone);
 
-    res.json({
-      success: true,
-      mode: "pairing",
-      pairingCode,
-      sessionId,
-      phone: cleanPhone,
-      expiresIn: 90000,
-      instructions:
-        "Open WhatsApp → Linked Devices → Link a device → Link with phone number"
-    });
+    if (!responded) {
+      responded = true;
+      clearTimeout(timeout);
 
+      res.json({
+        success: true,
+        mode: "pairing",
+        pairingCode,          // ✅ 8-digit code
+        sessionId,
+        phone: cleanPhone,
+        instructions:
+          "Open WhatsApp → Linked Devices → Link a device → Link with phone number"
+      });
+    }
+
+    // 🔄 Connection events
     sock.ev.on("connection.update", (update) => {
       const { connection, lastDisconnect } = update;
 
       if (connection === "open") {
-        clearTimeout(timeout);
         console.log("✅ WhatsApp paired:", sessionId);
       }
 
@@ -78,22 +86,20 @@ export async function generatePairingCode(req, res) {
       }
     });
 
+    // ✅ Save creds to MongoDB
     sock.ev.on("creds.update", saveCreds);
 
   } catch (err) {
     console.error("Pairing error:", err);
 
-    try {
-      sock?.end();
-    } catch {}
-
-    clearTimeout(timeout);
-
-    if (!res.headersSent) {
+    if (!responded) {
+      responded = true;
       res.status(500).json({
         success: false,
         error: "Failed to generate pairing code"
       });
     }
+
+    if (sock) sock.end();
   }
 }

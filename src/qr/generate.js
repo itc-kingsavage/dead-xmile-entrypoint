@@ -1,10 +1,11 @@
+// src/qr/generate.js
+
 import makeWASocket, {
   useMultiFileAuthState,
   DisconnectReason
 } from "@whiskeysockets/baileys";
 
 import qrcode from "qrcode";
-import fs from "fs";
 import path from "path";
 import logger from "../utils/logger.js";
 import { generateSessionId } from "../session/store.js";
@@ -15,53 +16,78 @@ export async function generateQR(res) {
   const sessionId = generateSessionId();
   const sessionDir = path.join("src/sessions", sessionId);
 
-  const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-
-  const sock = makeWASocket({
-    auth: state,
-    printQRInTerminal: false
-  });
-
+  let responded = false;
   let qrTimeout;
+  let sock;
 
-  sock.ev.on("connection.update", async (update) => {
-    const { qr, connection, lastDisconnect } = update;
+  try {
+    const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
 
-    if (qr) {
-      logger.info("QR generated");
+    sock = makeWASocket({
+      auth: state,
+      printQRInTerminal: false
+    });
 
-      clearTimeout(qrTimeout);
+    sock.ev.on("connection.update", async (update) => {
+      const { qr, connection, lastDisconnect } = update;
 
-      qrTimeout = setTimeout(() => {
-        logger.warn("QR expired, regenerating...");
-        sock.ws.close();
-      }, QR_TIMEOUT);
+      // ---------- QR GENERATED ----------
+      if (qr && !responded) {
+        responded = true;
+        logger.info(`QR generated for ${sessionId}`);
 
-      const qrImage = await qrcode.toDataURL(qr);
-      return res.json({
-        success: true,
-        sessionId,
-        qr: qrImage,
-        expiresIn: QR_TIMEOUT
+        qrTimeout = setTimeout(() => {
+          logger.warn("QR expired, closing socket...");
+          sock?.ws?.close();
+        }, QR_TIMEOUT);
+
+        const qrImage = await qrcode.toDataURL(qr);
+
+        return res.json({
+          success: true,
+          sessionId,
+          qr: qrImage,
+          expiresIn: QR_TIMEOUT
+        });
+      }
+
+      // ---------- CONNECTED ----------
+      if (connection === "open") {
+        logger.success(`WhatsApp logged in: ${sessionId}`);
+        clearTimeout(qrTimeout);
+      }
+
+      // ---------- DISCONNECTED ----------
+      if (connection === "close") {
+        const reason =
+          lastDisconnect?.error?.output?.statusCode ||
+          DisconnectReason.connectionClosed;
+
+        logger.warn(`Connection closed (${reason}) for ${sessionId}`);
+
+        clearTimeout(qrTimeout);
+
+        // Auto-regenerate ONLY if QR was not scanned yet
+        if (
+          !responded &&
+          reason !== DisconnectReason.loggedOut
+        ) {
+          logger.info("Auto-regenerating QR...");
+          return generateQR(res);
+        }
+      }
+    });
+
+    sock.ev.on("creds.update", saveCreds);
+
+  } catch (err) {
+    logger.error("QR generation failed");
+
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        error: "Failed to generate QR"
       });
     }
-
-    if (connection === "open") {
-      logger.success(`Logged in: ${sessionId}`);
-      clearTimeout(qrTimeout);
-    }
-
-    if (connection === "close") {
-      const reason = lastDisconnect?.error?.output?.statusCode;
-
-      logger.warn(`Connection closed: ${reason}`);
-
-      if (reason !== DisconnectReason.loggedOut) {
-        logger.info("Attempting reconnect...");
-        generateQR(res);
-      }
-    }
-  });
-
-  sock.ev.on("creds.update", saveCreds);
-                   }
+  }
+}

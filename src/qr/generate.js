@@ -3,135 +3,90 @@ import makeWASocket, {
 } from "@whiskeysockets/baileys";
 import QRCode from "qrcode";
 import { randomUUID } from "crypto";
-import { MongoClient } from "mongodb";
+import { useMongoAuthState } from "../db/mongoAuth.js";
 
-/* =========================
-   MongoDB Setup
-========================= */
-const MONGO_URI = process.env.MONGO_URI;
-const DB_NAME = "dead_xmile";
-const COLLECTION = "sessions";
-
-let mongoClient;
-async function getCollection() {
-  if (!mongoClient) {
-    mongoClient = new MongoClient(MONGO_URI);
-    await mongoClient.connect();
-  }
-  return mongoClient.db(DB_NAME).collection(COLLECTION);
-}
-
-/* =========================
-   Auth State (MongoDB)
-========================= */
-async function useMongoAuthState(sessionId) {
-  const col = await getCollection();
-
-  const session = await col.findOne({ sessionId });
-  let creds = session?.creds || {};
-  let keys = session?.keys || {};
-
-  return {
-    state: {
-      creds,
-      keys: {
-        get: (type, ids) => {
-          const data = {};
-          for (const id of ids) {
-            if (keys[type]?.[id]) {
-              data[id] = keys[type][id];
-            }
-          }
-          return data;
-        },
-        set: async (data) => {
-          for (const type in data) {
-            keys[type] = keys[type] || {};
-            Object.assign(keys[type], data[type]);
-          }
-          await col.updateOne(
-            { sessionId },
-            { $set: { creds, keys } },
-            { upsert: true }
-          );
-        }
-      }
-    },
-    saveCreds: async () => {
-      await col.updateOne(
-        { sessionId },
-        { $set: { creds, keys } },
-        { upsert: true }
-      );
-    }
-  };
-}
-
-/* =========================
-   QR Generator
-========================= */
 export async function generateQR(req, res) {
   const sessionId = `dead-xmile-${randomUUID().slice(0, 8)}`;
+
   let responded = false;
+  let sock;
 
-  const { state, saveCreds } = await useMongoAuthState(sessionId);
+  try {
+    // ✅ MongoDB-based auth state
+    const { state, saveCreds } = await useMongoAuthState(sessionId);
 
-  const sock = makeWASocket({
-    auth: state,
-    printQRInTerminal: false,
-    browser: ["Dead-Xmile", "Chrome", "1.0.0"]
-  });
+    sock = makeWASocket({
+      auth: state,
+      printQRInTerminal: false,
+      browser: ["Dead-Xmile", "Chrome", "1.0.0"]
+    });
 
-  const timeout = setTimeout(() => {
-    if (!responded) {
-      responded = true;
-      sock.end();
-      res.json({
-        success: false,
-        error: "QR expired. Please generate a new one."
-      });
-    }
-  }, 90000); // 90 seconds
-
-  sock.ev.on("connection.update", async (update) => {
-    const { qr, connection, lastDisconnect } = update;
-
-    if (qr && !responded) {
-      responded = true;
-      clearTimeout(timeout);
-
-      const qrBase64 = await QRCode.toDataURL(qr);
-
-      res.json({
-        success: true,
-        mode: "qr",
-        qr: qrBase64,
-        sessionId,
-        expiresIn: 90000
-      });
-    }
-
-    if (connection === "open") {
-      console.log(`✅ WhatsApp linked | session: ${sessionId}`);
-    }
-
-    if (connection === "close") {
-      const code = lastDisconnect?.error?.output?.statusCode;
-
+    // ⏱ Safety timeout (90 seconds)
+    const timeout = setTimeout(() => {
       if (!responded) {
         responded = true;
-        clearTimeout(timeout);
+        sock.end();
         res.json({
           success: false,
-          error: "Connection closed before linking."
+          error: "QR expired. Please generate a new one."
+        });
+      }
+    }, 90000);
+
+    sock.ev.on("connection.update", async (update) => {
+      const { qr, connection, lastDisconnect } = update;
+
+      // ✅ QR generated
+      if (qr && !responded) {
+        responded = true;
+        clearTimeout(timeout);
+
+        const qrBase64 = await QRCode.toDataURL(qr);
+
+        res.json({
+          success: true,
+          mode: "qr",
+          qr: qrBase64,
+          sessionId,
+          expiresIn: 90000
         });
       }
 
-      if (code === DisconnectReason.loggedOut) {
-        console.warn(`⚠️ Logged out | session: ${sessionId}`);
+      // ✅ WhatsApp linked
+      if (connection === "open") {
+        console.log("✅ WhatsApp linked:", sessionId);
       }
-    }
-  });
 
-  sock.ev.on("creds.update", saveCreds);
+      // ❌ Connection closed
+      if (connection === "close") {
+        const code = lastDisconnect?.error?.output?.statusCode;
+        console.warn("⚠️ Connection closed:", code);
+
+        if (!responded) {
+          responded = true;
+          clearTimeout(timeout);
+          res.json({
+            success: false,
+            error: "WhatsApp rejected connection. Try again."
+          });
+        }
+      }
+    });
+
+    // ✅ Save creds to MongoDB
+    sock.ev.on("creds.update", saveCreds);
+
+  } catch (err) {
+    console.error("QR generation error:", err);
+
+    if (!responded) {
+      responded = true;
+      res.status(500).json({
+        success: false,
+        error: "Failed to generate QR"
+      });
+    }
+
+    if (sock) sock.end();
+  }
 }
